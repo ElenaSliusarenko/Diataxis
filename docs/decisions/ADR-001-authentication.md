@@ -8,7 +8,7 @@
 
 ---
 ## Context
-We need to implement secure user authentication and authorization for the mobile application. Phase‑0 assessment exists at `features/auth/assessment.md` and defines the scope (email/password registration with 6‑digit email verification, email login, forgot password, logout, Google and Apple sign‑in, Cognito tokens and refresh) and constraints (use AWS Cognito as primary IdP). This ADR records the architectural decision about client integration approach and related operational choices.
+We need to implement secure user authentication and authorization for the mobile application. Phase‑0 assessment exists at [/features/auth/assessment.md](/features/auth/assessment.md) and defines the scope (email/password registration with 6‑digit email verification, email login, forgot password, logout, Google and Apple sign‑in, Cognito tokens and refresh) and constraints (use AWS Cognito as primary IdP). This ADR records the architectural decision about client integration approach and related operational choices.
 
 ## Decision
 We will use AWS Cognito User Pools as the primary identity provider and integrate clients with Cognito using the Cognito **Hosted UI** for OAuth/SSO flows. Mobile clients will use the Authorization Code flow with PKCE when interacting with Cognito. We will **not** introduce a BFF/edge service at this time; clients will interact directly with Cognito (via Hosted UI and SDKs as needed). Password storage and verification remain managed by Cognito.
@@ -84,4 +84,4 @@ Decision selects Hosted UI + PKCE + no BFF for current increment as best trade�
 ## References
 - features/auth/assessment.md
 - Project security / OAuth standards (link to canonical standard files per repo)
-- Diataxis & Assessment‑First patterns (see project docs / process) [1]
+- Diataxis & Assessment‑First patterns (see project docs / process)
