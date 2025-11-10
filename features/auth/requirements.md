@@ -1,11 +1,4 @@
----
 # Authentication & Authorization — Requirements (MVP)
-status: Draft
-owner: TBD
-date: YYYY-MM-DD
-feature_flag: feature.auth.*
-language: en
----
 
 ## Summary
 Deliver secure authentication and authorization for the mobile application using AWS Cognito (User Pools + Hosted UI). MVP scope: email registration with 6‑digit verification, email login, password recovery (forgot password), logout (revoke), session renewal via refresh tokens, and SSO via Google and Apple. Follow assessment‑first and reference‑first patterns; every ticket and doc must include a References block. [1]
