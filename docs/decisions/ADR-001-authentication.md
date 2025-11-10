@@ -7,8 +7,6 @@
 **Supersedes**: -
 
 ---
-# ADR-001 — Authentication architecture: AWS Cognito (Hosted UI)
-
 ## Context
 We need to implement secure user authentication and authorization for the mobile application. Phase‑0 assessment exists at `features/auth/assessment.md` and defines the scope (email/password registration with 6‑digit email verification, email login, forgot password, logout, Google and Apple sign‑in, Cognito tokens and refresh) and constraints (use AWS Cognito as primary IdP). This ADR records the architectural decision about client integration approach and related operational choices.
 
