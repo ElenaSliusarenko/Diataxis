@@ -57,7 +57,7 @@ Decision selects Hosted UI + PKCE + no BFF for current increment as best tradeâ€
 - Configure SES (or verify SES integration) and email templates for verification and password reset.
 - Register and configure IdPs: Google (OIDC) and Apple Sign in (Service ID, Key, Team ID).
 - Define token TTLs (access / id / refresh) in collaboration with Security Lead (suggested starting values in assessment).
-- Implement secure storage guidance for mobile teams (Keychain/Keystore) and document it in `features/auth/mobile-integration.md`.
+- Implement secure storage guidance for mobile teams (Keychain/Keystore) and document it in [/features/auth/mobile-integration.md]([/features/auth/mobile-integration.md]).
 - Add audit events for key auth operations (register, verify, login, forgot, logout, revoke).
 - Add feature flag `feature.auth.*` and ensure flows are disabled in production by default until rollout.
 
