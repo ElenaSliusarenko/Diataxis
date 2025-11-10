@@ -1,0 +1,1172 @@
+diff --git a/features/auth/assessment.md b/features/auth/assessment.md
+new file mode 100644
+index 0000000..e69de29
+--- /dev/null
++++ b/features/auth/assessment.md
+@@ -0,0 +1,220 @@
++---
++title: Authentication and Authorization — Phase 0 Assessment
++status: Draft
++owner: <owner-placeholder>
++last_review: YYYY-MM-DD
++feature_flag: feature.auth.*
++audience: Engineering, Security, Mobile
++language: en
++---
++
++# Authentication and Authorization — Phase 0 Assessment
++
++## Meta
++- Status: Draft  
++- Owner: <owner-placeholder>  
++- Last review: YYYY-MM-DD  
++- Feature flag: feature.auth.*  
++- Audience: Engineering, Security, Mobile  
++- Language: en
++
++## Summary
++We will implement secure user authentication and authorization for the mobile app using AWS Cognito as the primary identity provider. Initial scope covers: email/password registration with 6‑digit email verification, login for existing users, Google and Apple sign‑in, password recovery, and logout. Tokens: Cognito access/id/refresh with secure storage on device and PKCE for mobile. Pattern: Assessment‑First + Reference‑First + Feature Flags.
++
++## In Scope (current increment)
++- Email registration + 6‑digit email verification  
++- Email login for existing users  
++- Password recovery (forgot password)  
++- Logout (token revoke / global sign out)  
++- OAuth: Google and Apple via Cognito federation  
++- Session renewal via refresh token (stored securely on device)
++
++## Out of Scope (future increments)
++- Phone number registration + SMS verification  
++- Facebook OAuth  
++- Two‑factor authentication (TOTP) and backup codes  
++- Biometric authentication (local unlock of secure storage)  
++- Change email / change password from settings
++
++## Architecture and Integration Map
++- Identity: AWS Cognito User Pool (primary), App Clients (iOS/Android/Web)  
++- Federated IdPs: Google (OIDC), Apple ID (Sign in with Apple)  
++- Hosted UI: Cognito Hosted UI domain with strict redirect URIs  
++- Email: Amazon SES for verification and password reset templates  
++- Mobile: OAuth 2.0 Authorization Code + PKCE; secure token storage (Keychain/Keystore)  
++- Optional BFF (TBD): claims normalization, auditing, policy enforcement  
++- Observability: auth metrics, error rates, latency dashboards (SLOs TBD)  
++- Environments: dev / stage / prod
++
++## Token and Session Model (Cognito)
++- Tokens: access_token (short‑lived), id_token, refresh_token (longer‑lived)  
++- Storage (mobile): refresh_token in secure storage (Keychain/Keystore); access/id kept in memory  
++- Rotation: refresh token rotation; revoke on logout/global sign out  
++- Proposed TTLs (TBD with Security/Platform):
++  - access_token: 10–15 minutes  
++  - id_token: 10–60 minutes  
++  - refresh_token: 7–30 days  
++- Logout semantics: local token wipe + Cognito revoke/GlobalSignOut  
++- Password hashing: managed by Cognito (no custom bcrypt/argon2 in our code)
++
++## Security Considerations and Risks
++- PKCE mandatory for all mobile OAuth flows; no client_secret on device  
++- Strict allowlist of redirect URIs, iOS bundle IDs and Android SHA certs  
++- Secure token storage; protect debug builds from leaking tokens/logs  
++- Rate limiting for verification/reset attempts; abuse prevention (captcha/throttling)  
++- Validate state/nonce; prevent redirect spoofing; exact redirect matching  
++- Session hijack: implement refresh revoke and device/session inventory (future)  
++- Audit logging: register/verify/login/forgot/logout/revoke events  
++- Compliance/Privacy: PII minimization; secrets management; log redaction
++
++## User Flows (high level)
++- Register with email → receive 6‑digit code → verify → authenticated session  
++- Login with email/password → tokens issued → session persisted via refresh  
++- Forgot password → email code → set new password → login  
++- Google Sign‑In / Apple ID → Cognito federation → tokens issued  
++- Logout → local wipe + revoke/GlobalSignOut
++
++## Non‑Functional Requirements (NFRs)
++- Availability: ≥ 99.9% (leverages Cognito SLA)  
++- Security: OAuth/PKCE compliance; no secrets in app binaries  
++- Performance: p95 auth < 500 ms (excluding external IdP latency)  
++- Observability: dashboards (errors/latency/success rates by flow), alerts  
++- Accessibility (if Hosted UI used): adhere to org A11y standard
++
++## Open Questions (to resolve in ADR/design)
++- Client approach: Hosted UI vs native SDK (per platform) for UX and security?  
++- Need a BFF for claims normalization/audit/policy enforcement?  
++- Final token TTLs and forced logout semantics (global sign out)?  
++- Hosted UI branding and custom domain requirements?  
++- SES templates (copy/localization) and rate limits?
++
++## Feature Flags and Rollout
++- Feature flag key: feature.auth.*  
++- Environments: OFF in prod by default; ON in dev/stage  
++- Rollout plan: 5% → 25% → 50% → 100% with rollback triggers:
++  - Error rate spike, p95 latency breach, auth failure spike  
++- Evidence: link rollout dashboards and alarms in release PR
++
++## Acceptance Criteria (for this Assessment)
++- Integration map completed (Cognito, IdPs, Hosted UI, SES, mobile PKCE)  
++- Key risks identified with mitigations  
++- Feature flag and staged rollout plan drafted  
++- References block filled; owners assigned
++
++## Owners and RACI (initial)
++- BA: Assessment, requirements consolidation  
++- Lead Dev: Architecture, ADR, final approval  
++- Security Lead: Security review/sign‑off  
++- Mobile Lead: PKCE implementation and secure storage  
++- Platform/Infra: SES, domains, CI/CD gates
++
++## References (internal)
++- [/docs/decisions/ADR-001-authentication.md](/docs/decisions/ADR-001-authentication.md)  
++- [/reference/integration/cognito-configuration.md](/reference/integration/cognito-configuration.md)  
++- [/features/auth/requirements.md](/features/auth/requirements.md)  
++- [/features/auth/testing.md](/features/auth/testing.md)
++
++## Appendix: Environment Checklist (seed)
++- [ ] User Pool created for dev/stage/prod  
++- [ ] App Clients (iOS/Android/Web) with PKCE enabled  
++- [ ] Hosted UI domain set; redirect URIs registered  
++- [ ] SES domain verified; email templates created (verify/reset)  
++- [ ] Google and Apple IdPs configured (client IDs, keys, team IDs, bundle IDs, Android SHA)  
++- [ ] Logging/monitoring configured; dashboards stubbed
++
++---
+
+diff --git a/docs/decisions/ADR-001-authentication.md b/docs/decisions/ADR-001-authentication.md
+new file mode 100644
+index 0000000..e69de29
+--- /dev/null
++++ b/docs/decisions/ADR-001-authentication.md
+@@ -0,0 +1,172 @@
++---
++title: ADR-001 — Authentication architecture: AWS Cognito (Hosted UI)
++status: Proposed
++owner: <owner-placeholder>
++date: YYYY-MM-DD
++id: ADR-001
++tags: [authentication, cognito, hosted-ui, pkce, feature.auth]
++feature_flag: feature.auth.*
++language: en
++---
++
++# ADR-001 — Authentication architecture: AWS Cognito (Hosted UI)
++
++## Context
++We need to implement secure user authentication and authorization for the mobile application. Phase‑0 assessment exists at [/features/auth/assessment.md](/features/auth/assessment.md) and defines the scope and constraints (use AWS Cognito as primary IdP). This ADR records the architectural decision about client integration approach and related operational choices.
++
++## Decision
++We will use AWS Cognito User Pools as the primary identity provider and integrate clients with Cognito using the Cognito **Hosted UI** for sign-in / sign-up / SSO flows. Mobile clients will use the Authorization Code flow with PKCE. We will **not** introduce a BFF/edge service at this time; clients will interact directly with Cognito (via Hosted UI and SDKs as needed). Password storage and verification remain managed by Cognito.
++
++Key points:
++- Use Cognito Hosted UI for sign-in / sign-up / SSO (Google, Apple) to centralize flows and reduce client complexity.  
++- Enforce Authorization Code + PKCE for all mobile/native clients.  
++- Do not store client_secret in mobile apps.  
++- Use Cognito access/id/refresh tokens; refresh tokens stored in secure device storage (Keychain/Keystore).  
++- BFF/edge layer: deferred (No BFF now). If later needed for claims normalization, auditing, or advanced policies, introduce as separate ADR.
++
++## Rationale
++- Hosted UI reduces implementation surface on clients, centralizes security flows, and simplifies SSO provider configuration and branding.  
++- PKCE provides protection for native/mobile apps where client_secret cannot be safely stored.  
++- Avoiding a BFF reduces initial scope and operational burden; Cognito provides token management and federation capability suitable for the MVP increment.  
++- Keeping password management in Cognito minimizes our security and compliance exposure.
++
++## Consequences
++Positive:
++- Faster integration and delivery for SSO and password flows.  
++- Lower risk of incorrect password handling or hashing logic in our codebase.  
++- Centralized email/template management through SES + Cognito templates.
++
++Negative / Trade-offs:
++- Vendor lock‑in to AWS Cognito features and behaviors.  
++- Less direct control over token formats/claims (mitigate with attribute mapping where supported).  
++- If later server‑side claim normalization or advanced session policies are required, a BFF will be needed and migration planned.
++
++## Alternatives considered
++1. Custom auth service (self‑managed passwords with bcrypt/argon2) — more control but more risk/effort.  
++2. Cognito Native SDKs with custom UI (no Hosted UI) — more control/branding but higher client complexity.  
++3. Introduce BFF now — centralization benefits but increases scope and operational load.
++
++Decision: Hosted UI + PKCE + no BFF for current increment as best trade‑off for speed, security, and maintainability.
++
++## Implementation Notes (next steps)
++- Create / configure Cognito User Pool(s) for dev/stage/prod.  
++- Create App Clients for mobile platforms and web; enable Authorization Code Grant and PKCE for mobile clients.  
++- Configure Cognito Hosted UI domain(s); register exact redirect URIs (strict allowlist), bundle IDs and Android SHA fingerprints for mobile.  
++- Configure SES and email templates for verification and password reset.  
++- Register and configure IdPs: Google (OIDC) and Apple Sign in.  
++- Define token TTLs (access / id / refresh) with Security.  
++- Implement secure storage guidance for mobile teams (`/features/auth/mobile-integration.md`).  
++- Add audit events for key auth operations (register, verify, login, forgot, logout, revoke).  
++- Add feature flag `feature.auth.*` and ensure flows disabled in production by default.
++
++## Rollout / Feature Flagging
++- Use `feature.auth.*` to gate behavioral changes. Default OFF in production.  
++- Staged rollout: 5% → 25% → 50% → 100% with rollback criteria (error rate, p95 latency, auth failure spike).  
++- Include metrics and dashboards for auth success rate, error rate, and latency before rollout.
++
++## Acceptance Criteria
++- ADR accepted by Lead Dev and Security Lead (sign‑off recorded).  
++- Cognito configuration (dev) created and validated for registration, verification, sign‑in, forgot password, and SSO via Hosted UI + PKCE.  
++- Mobile PKCE flows verified end‑to‑end; no client_secret persisted on device.  
++- SES templates tested; verification and reset emails delivered.  
++- Feature flag `feature.auth.*` created and honored in environments.
++
++## RACI
++- Owner: <owner-placeholder> — ADR owner and initial implementation lead  
++- Security Lead: security review and signoff  
++- Mobile Lead: mobile integration and PKCE implementation  
++- Platform/Infra: Cognito, SES, domain configuration  
++- BA: acceptance criteria & docs
++
++## References
++- [/features/auth/assessment.md](/features/auth/assessment.md)  
++- [/reference/integration/cognito-configuration.md](/reference/integration/cognito-configuration.md)
+
+diff --git a/features/auth/requirements.md b/features/auth/requirements.md
+new file mode 100644
+index 0000000..e69de29
+--- /dev/null
++++ b/features/auth/requirements.md
+@@ -0,0 +1,236 @@
++---
++title: Auth feature — Requirements
++status: Draft
++owner: <owner-placeholder>
++date: YYYY-MM-DD
++feature_flag: feature.auth.*
++language: en
++---
++
++# Authentication & Authorization — Requirements (MVP)
++
++## Summary
++Deliver secure authentication and authorization for the mobile application using AWS Cognito (User Pools + Hosted UI). MVP scope: email registration with 6‑digit verification, email login, password recovery (forgot password), logout (revoke), session renewal via refresh tokens, and SSO via Google and Apple. Follow assessment‑first and reference‑first patterns; every ticket and doc must include a References block.
++
++## Scope
++
++### In scope (MVP)
++- Email registration with 6‑digit verification code  
++- Email login (existing users)  
++- Password recovery (forgot password) via email code  
++- Logout (local wipe + Cognito revoke / GlobalSignOut)  
++- Session renewal via refresh token stored securely on device  
++- OAuth SSO: Google and Apple via Cognito Hosted UI (PKCE for mobile)
++
++### Out of scope (future increments)
++- Phone number registration + SMS verification  
++- Facebook OAuth  
++- Two‑factor authentication (TOTP) and backup codes  
++- Biometric-first authentication (device unlock as UX convenience only)  
++- Change email / change password from settings (post‑MVP)
++
++## User Stories & Acceptance Criteria
++
++1. **Register with email**  
++   - As a: New user  
++   - I want: to register with email and receive a 6‑digit verification code  
++   - So that: I can verify ownership and start a session  
++   - Acceptance criteria:
++     - Verification email sent via SES within 60s of registration.  
++     - Code: 6 numeric digits; TTL = 10 minutes (configurable).  
++     - Max verification attempts per code: 5.  
++     - After verification user receives Cognito id_token + access_token + refresh_token.  
++     - Error messages are generic (no PII leakage) and logged for audit.
++
++2. **Login with email and password**  
++   - As a: Existing user  
++   - I want: to login using email and password  
++   - Acceptance criteria:
++     - Successful login returns id_token, access_token, refresh_token.  
++     - Failed login returns consistent error codes and increments rate‑limit counters.  
++     - Account lockout or progressive delays applied after configurable failed attempts.  
++     - All login attempts are logged to audit stream.
++
++3. **Forgot password (password recovery)**  
++   - As a: User who forgot password  
++   - I want: to request a password reset via email and set a new password  
++   - Acceptance criteria:
++     - Password reset request sends a 6‑digit code to the verified email.  
++     - Code TTL configurable (suggest 10 minutes).  
++     - After successful reset, previous refresh tokens are invalidated (revoked).  
++     - Rate limiting and anti‑abuse measures applied to reset requests.
++
++4. **Logout and token revocation**  
++   - As a: Authenticated user  
++   - I want: to logout and revoke my session  
++   - Acceptance criteria:
++     - Logout triggers local secure storage wipe and Cognito revoke/GlobalSignOut.  
++     - After logout, previously issued refresh tokens cannot be used.  
++     - Logout action recorded in audit logs.
++
++5. **Sign in with Google**  
++   - As a: User  
++   - I want: to sign in with Google via Cognito Hosted UI  
++   - Acceptance criteria:
++     - Google IdP registered in Cognito; OAuth flow works end‑to‑end (Hosted UI).  
++     - User receives tokens equivalent to email flow.  
++     - Mapped attributes (email/name) populated in user profile.
++
++6. **Sign in with Apple**  
++   - As a: Apple device user  
++   - I want: to sign in with Apple via Cognito Hosted UI  
++   - Acceptance criteria:
++     - Apple Sign‑in configured in Cognito; iOS bundle ID and redirect URIs validated.  
++     - Token exchange and hosted UI flow work end‑to‑end with PKCE.  
++     - Email attribute handled per Apple private relay behavior.
++
++## Non‑Functional Requirements (NFRs)
++- Security
++  - PKCE mandatory for all mobile/native OAuth flows; do not store client_secret on devices.  
++  - Secrets management in platform vault; no secrets in repo or app binaries.  
++  - Audit logging for: register, verify, login, forgot, logout, revoke.
++- Performance & Availability
++  - p95 auth latency: < 500 ms (excluding external IdP latency).  
++  - Availability target: align with Cognito SLA; aim ≥ 99.9%.
++- Tokens & TTL (initial proposals)
++  - access_token: 10–15 minutes  
++  - id_token: 10–60 minutes  
++  - refresh_token: 7–30 days (rotation & revocation policy required)
++- Observability
++  - Dashboards for success rate, error rate, latency per flow before rollout.
++- Rate limiting & Anti‑abuse
++  - Verification/reset attempts throttled per IP and per account.
++  - CAPTCHAs or additional mitigations for suspicious traffic.
++
++## Integration Points
++- AWS Cognito User Pools (primary IdP) — user lifecycle, tokens, Hosted UI  
++- Amazon SES (email delivery) for verification and reset  
++- Mobile clients: Authorization Code + PKCE; secure storage in Keychain (iOS) / Keystore (Android)  
++- Optional: No BFF for MVP — clients interact directly with Cognito Hosted UI  
++- Observability: metrics exported to SRE dashboards (SLOs defined prior to rollout)
++
++## Risks & Mitigations
++- Abuse of verification/reset code → rate limits, CAPTCHA, device fingerprint heuristics, monitoring.  
++- Token theft on device → secure storage guidance, short access_token TTL, revoke strategy.  
++- Redirect URI misconfiguration → strict allowlist; iOS bundle ID and Android SHA verification; state/nonce checks.  
++- Vendor lock‑in → document migration considerations in ADR; keep API contracts if BFF added later.
++
++## Definition of Ready (DoR)
++- Phase‑0 assessment completed: [/features/auth/assessment.md](/features/auth/assessment.md)  
++- ADR accepted: [/docs/decisions/ADR-001-authentication.md](/docs/decisions/ADR-001-authentication.md)  
++- Owners assigned for feature, infra and mobile integration  
++- SES domain verified or email provider chosen for dev/stage/prod  
++- Feature flag planned: feature.auth.* (subflags for granular flows)  
++- Test plan drafted (unit, integration, e2e) and automation owners assigned
++
++## Definition of Done (DoD)
++- Automated tests (unit/integration/e2e) green for critical flows  
++- Security checks passed (SAST, dependency & secrets scan)  
++- Docs updated: How‑to, Reference, Explanation, Tutorial for implemented flows  
++- Observability dashboards and alerts configured  
++- Feature flag available and staged rollout plan documented  
++- Security Lead and Lead Dev sign‑off recorded
++
++## Testing Requirements
++- Happy paths and negative cases for codes (expired, reused, wrong)  
++- PKCE flow verification and replay protection tests  
++- Refresh token rotation tests and revoke behavior tests  
++- Rate limiting and abuse detection test scenarios  
++- Integration tests for Google and Apple IdPs (staging with real providers where possible)
++
++## Open Questions
++- Final token TTLs and refresh rotation policy (Security Lead decision)  
++- SES vs alternative email provider for production (Platform decision)  
++- Exact user profile attribute mapping from IdPs (Product/UX)  
++- Branding/custom domain for Hosted UI (Product/Platform)
++
++## References
++- [/features/auth/assessment.md](/features/auth/assessment.md)  
++- [/docs/decisions/ADR-001-authentication.md](/docs/decisions/ADR-001-authentication.md)  
++- Project Security / OAuth standards (canonical: central standards repo)
++
++---
+
+diff --git a/features/auth/tasks.md b/features/auth/tasks.md
+new file mode 100644
+index 0000000..e69de29
+--- /dev/null
++++ b/features/auth/tasks.md
+@@ -0,0 +1,272 @@
++---
++title: Auth feature — Implementation Tasks
++status: Draft
++owner: <owner-placeholder>
++date: YYYY-MM-DD
++feature_flag: feature.auth.*
++language: en
++---
++
++# /features/auth/tasks.md
++
++Short description  
++Checklist of tasks to implement the MVP authentication/authorization functionality (email registration + verification, login, forgot password, logout, refresh, Google/Apple SSO). Each task includes: owner (placeholder), estimate, risk tag and Acceptance Criteria. Every task must include References and feature_flag.
++
++## Checklist — Core tasks (MVP)
++
++- [ ] 1) Configure Cognito User Pools (dev/stage/prod)  
++  - Owner: <owner-placeholder>  
++  - Estimate: M (0.5–1d)  
++  - Risk: R2  
++  - Feature flag: feature.auth.infra  
++  - Acceptance Criteria:
++    - User Pool(s) created for dev/stage/prod
++    - App Clients (iOS/Android/Web) enabled with Authorization Code Grant + PKCE
++    - Hosted UI domain configured; redirect URIs registered
++    - Password policy and email verification flow configured
++    - Document updated: [/reference/integration/cognito-configuration.md](/reference/integration/cognito-configuration.md)
++
++- [ ] 2) Configure SES and email templates (verification / password reset)  
++  - Owner: <owner-placeholder>  
++  - Estimate: S (0.5d)  
++  - Risk: R2  
++  - Feature flag: feature.auth.email_templates  
++  - Acceptance Criteria:
++    - SES domain/identities verified for dev/stage/prod
++    - Email templates (verification, reset) created and approved by UX
++    - Test emails delivered in dev for registration/forgot
++    - Delivery logs available for audit
++
++- [ ] 3) Implement Email registration + verification (backend + mobile integration)  
++  - Owner: <owner-placeholder>  
++  - Estimate: M (1–3d)  
++  - Risk: R1  
++  - Feature flag: feature.auth.email_registration  
++  - Acceptance Criteria:
++    - Email registration creates user in Cognito and sends a 6‑digit code
++    - Code TTL = 10 minutes (configurable); max attempts = 5
++    - After verification, id/access/refresh tokens issued by Cognito
++    - Generic error messages (no PII exposure) and audit logging in place
++
++- [ ] 4) Implement Email login + account lockout / rate limiting  
++  - Owner: <owner-placeholder>  
++  - Estimate: M (1–2d)  
++  - Risk: R1  
++  - Feature flag: feature.auth.email_login  
++  - Acceptance Criteria:
++    - Successful login returns id/access/refresh tokens
++    - Failed logins increment rate‑limit counters; progressive delay/lockout applied
++    - Login attempts logged to audit stream
++
++- [ ] 5) Implement Forgot password (reset via email code)  
++  - Owner: <owner-placeholder>  
++  - Estimate: S (0.5–1d)  
++  - Risk: R1  
++  - Feature flag: feature.auth.forgot_password  
++  - Acceptance Criteria:
++    - Password reset request sends 6‑digit code to verified email
++    - Code TTL configurable (suggest 10 minutes)
++    - After successful reset, previous refresh tokens invalidated
++    - Rate limiting and anti‑abuse rules applied
++
++- [ ] 6) Logout + token revoke / GlobalSignOut flow  
++  - Owner: <owner-placeholder>  
++  - Estimate: S (0.5–1d)  
++  - Risk: R1  
++  - Feature flag: feature.auth.logout  
++  - Acceptance Criteria:
++    - Logout performs local secure storage wipe and calls Cognito revoke / GlobalSignOut
++    - Previously issued refresh tokens cannot be used post‑logout
++    - Logout event recorded in audit logs
++
++- [ ] 7) Mobile: PKCE integration & secure storage guidance  
++  - Owner: <owner-placeholder>  
++  - Estimate: M (1–2d)  
++  - Risk: R1  
++  - Feature flag: feature.auth.mobile_pkce  
++  - Acceptance Criteria:
++    - Authorization Code + PKCE implemented and tested e2e
++    - Developer guidance added for Keychain (iOS) / Keystore (Android): `/features/auth/mobile-integration.md`
++    - No client_secret in apps; no token leakage in logs
++
++- [ ] 8) Integrate Google IdP in Cognito (dev)  
++  - Owner: <owner-placeholder>  
++  - Estimate: S (0.5–1d)  
++  - Risk: R2  
++  - Feature flag: feature.auth.google_sso  
++  - Acceptance Criteria:
++    - Google OAuth app registered; IdP configured in Cognito
++    - Hosted UI flow with Google works in dev; profile attributes mapped
++
++- [ ] 9) Integrate Apple Sign‑in in Cognito (dev)  
++  - Owner: <owner-placeholder>  
++  - Estimate: S (0.5–1d)  
++  - Risk: R2  
++  - Feature flag: feature.auth.apple_sso  
++  - Acceptance Criteria:
++    - Apple Sign‑in configured and tested
++    - Hosted UI flow with Apple works on iOS using PKCE; email handling per Apple rules
++
++- [ ] 10) Docs & Diátaxis artifacts (How‑to, Tutorial, Reference, Explanation)  
++  - Owner: <owner-placeholder>  
++  - Estimate: S (1–2d)  
++  - Risk: R3  
++  - Feature flag: feature.auth.docs  
++  - Acceptance Criteria:
++    - How‑to: register/login/SSO/forgot/logout prepared under `/how-to/...`
++    - Reference: Cognito config doc `/reference/integration/cognito-configuration.md`
++    - Explanation: token model and security rationale documented
++    - All docs include References block: [/features/auth/assessment.md](/features/auth/assessment.md), [/docs/decisions/ADR-001-authentication.md](/docs/decisions/ADR-001-authentication.md)
++
++- [ ] 11) Tests: unit, integration, e2e (critical paths)  
++  - Owner: <owner-placeholder>  
++  - Estimate: M (1–2d)  
++  - Risk: R1  
++  - Feature flag: feature.auth.tests  
++  - Acceptance Criteria:
++    - E2E: register→verify→login green; forgot, logout, SSO e2e passing
++    - PKCE replay/expiry tests, refresh rotation & revoke tests present
++    - Security tests: SAST, dependency scan, secrets scan pass in CI
++
++- [ ] 12) Observability & SLOs / Dashboards  
++  - Owner: <owner-placeholder>  
++  - Estimate: S (0.5–1d)  
++  - Risk: R2  
++  - Feature flag: feature.auth.observability  
++  - Acceptance Criteria:
++    - Dashboards: auth success rate, error rate, latency per flow
++    - Alerts set for rollback triggers (error rate threshold, p95 latency)
++    - Links to dashboards added to PR / release notes
++
++- [ ] 13) Runbook & Rollout plan (staged)  
++  - Owner: <owner-placeholder>  
++  - Estimate: S (0.5d)  
++  - Risk: R2  
++  - Feature flag: feature.auth.rollout  
++  - Acceptance Criteria:
++    - Runbook: deployment, rollback, incident steps (`/runbooks/deployment-auth.md`)
++    - Rollout plan: 5% → 25% → 50% → 100% with criteria
++    - Feature flag `feature.auth.*` exists and togglable per environment
++
++## Optional / Future (post‑MVP)
++- [ ] Phone registration + SMS verification — feature.auth.phone_registration (R2)  
++- [ ] Facebook OAuth — feature.auth.facebook_sso (R2)  
++- [ ] 2FA (TOTP) + backup codes — feature.auth.2fa (R1)  
++- [ ] Biometric local unlock (UX convenience) — feature.auth.biometric (R3)  
++- [ ] Account settings: change email / change password — feature.auth.account_settings (R2)
++
++## DoR checklist (for each implementation issue)
++- [ ] Phase‑0 assessment complete: [/features/auth/assessment.md](/features/auth/assessment.md)  
++- [ ] ADR accepted: [/docs/decisions/ADR-001-authentication.md](/docs/decisions/ADR-001-authentication.md)  
++- [ ] Owner assigned  
++- [ ] Infra ticket created (if required)  
++- [ ] Feature flag defined (feature.auth.*)  
++- [ ] Test plan drafted
++
++## References (required)
++- [/features/auth/assessment.md](/features/auth/assessment.md)  
++- [/docs/decisions/ADR-001-authentication.md](/docs/decisions/ADR-001-authentication.md)
++
++---
+
+diff --git a/features/auth/testing.md b/features/auth/testing.md
+new file mode 100644
+index 0000000..e69de29
+--- /dev/null
++++ b/features/auth/testing.md
+@@ -0,0 +1,220 @@
++---
++title: Auth feature — Testing & Smoke Checklist
++status: Draft
++owner: <owner-placeholder>
++last_review: YYYY-MM-DD
++feature_flag: feature.auth.*
++language: en
++---
++
++# Authentication — Testing & Smoke Checklist
++
++## Purpose
++This document defines smoke tests, e2e scenarios, automated test requirements and CI gating criteria for the Authentication MVP. Use it to validate dev/stage builds before staged rollout.
++
++## References
++- [/features/auth/assessment.md](/features/auth/assessment.md)  
++- [/features/auth/requirements.md](/features/auth/requirements.md)  
++- [/reference/integration/cognito-configuration.md](/reference/integration/cognito-configuration.md)  
++- [/runbooks/deployment-auth.md](/runbooks/deployment-auth.md)
++
++## Test environments
++- dev: full feature set ON for dev accounts  
++- stage: mirror prod config; feature flag OFF by default, enable for smoke  
++- prod: feature flag OFF until staged rollout
++
++## Test accounts (examples — create before testing)
++- dev_verified@example.com — verified, password: TempPass!123  
++- dev_unverified@example.com — unverified  
++- sso_google_test@example.com — Google test account  
++- sso_apple_test@privaterelay.appleid.com — Apple test account
++
++## Smoke tests (manual / quick)
++Each smoke step: expected result, pass/fail, logs to collect.
++
++1. **Register (email)**  
++   - Steps: open Hosted UI / registration flow → fill email/password → submit  
++   - Expect: verification email sent; code delivered; code verifies; tokens issued
++2. **Verify (email code)**  
++   - Steps: input 6‑digit code  
++   - Expect: verification success; user confirmed; tokens valid
++3. **Login (email + password)**  
++   - Expect: id/access/refresh tokens returned; status 200; audit log entry
++4. **Forgot password**  
++   - Steps: request reset → receive code → set new password → login  
++   - Expect: previous refresh tokens invalidated; new tokens issued
++5. **Logout**  
++   - Steps: app calls logout → Cognito revoke/GlobalSignOut  
++   - Expect: refresh token invalid; subsequent refresh attempts fail
++6. **Token refresh**  
++   - Steps: use refresh token to get new access token  
++   - Expect: new access_token returned; rotation/expiry behavior validated
++7. **Google SSO (Hosted UI)**  
++   - Expect: Hosted UI flow completes; tokens issued; profile mapped
++8. **Apple Sign‑in (Hosted UI)**  
++   - Expect: flow completes on iOS device; private relay email handled
++9. **PKCE negative test**  
++   - Steps: attempt auth with invalid code_verifier  
++   - Expect: flow rejected; no tokens issued
++10. **SES deliverability**  
++   - Verify verification/reset emails are delivered and templates render correctly
++
++## End‑to‑End automated test scenarios (for CI)
++- e2e-001_register_verify_login_should_succeed  
++- e2e-002_forgot_password_flow_should_reset_and_invalidate_old_tokens  
++- e2e-003_logout_should_revoke_refresh_tokens  
++- e2e-004_token_refresh_rotation_and_revoke  
++- e2e-005_google_sso_flow  
++- e2e-006_apple_sso_flow (real device / staging)
++- security-001_pkce_replay_protection  
++- security-002_rate_limit_verification_attempts
++
++Each automated test must assert: HTTP status codes, token structure (required claims), audit log events, and no leakage of secrets in logs.
++
++## CI gating requirements
++- Run e2e smoke suite on PRs targeting release branches.  
++- Required checks to pass before merge:
++  - Unit tests  
++  - Integration tests  
++  - Critical e2e suite  
++  - SAST & secrets scan  
++  - Docs build & linkcheck
++
++## Test data & environment setup
++- Use configuration in [/reference/integration/cognito-configuration.md](/reference/integration/cognito-configuration.md)  
++- Test credentials stored in secrets manager (rotate regularly) — DO NOT commit secrets to repo.  
++- For SSO tests register test apps at Google/Apple with dev redirect URIs
++
++## Observability checks during tests
++- Monitor: auth success rate, auth error rate, p95 latency, SES bounce rate  
++- Capture traces for failed flows (trace id in logs)  
++- Save dashboard snapshots as evidence
++
++## Failure handling
++- On failure in dev: create Jira bug, tag severity, link failing logs, assign owner placeholder  
++- On failure in stage during canary: follow runbook rollback steps
++
++## Acceptance criteria for QA sign‑off
++- All smoke tests PASS on stage with feature flag enabled for staging group  
++- Automated e2e suite green in CI for release candidate  
++- SAST & secrets scan show no critical findings  
++- Observability dashboards show expected baselines
++
++## Notes & troubleshooting
++- Apple private relay email handling requires special test accounts  
++- Mock external IdP responses for fast dev tests; run at least one E2E SSO test against real provider in staging
++
++---
+
+diff --git a/reference/integration/cognito-configuration.md b/reference/integration/cognito-configuration.md
+new file mode 100644
+index 0000000..e69de29
+--- /dev/null
++++ b/reference/integration/cognito-configuration.md
+@@ -0,0 +1,220 @@
++---
++title: AWS Cognito — Configuration & Integration (dev / stage / prod)
++status: Draft
++owner: <owner-placeholder>
++last_review: YYYY-MM-DD
++feature: Authentication
++feature_flag: feature.auth.*
++language: en
++---
++
++# AWS Cognito — Configuration & Integration (dev / stage / prod)
++
++## Summary
++Canonical Cognito configuration and integration points for the Authentication MVP. Reference for Infra, Backend, and Mobile teams to create matching User Pools, App Clients, Hosted UI, IdP connections (Google, Apple), and email templates (SES).
++
++## Environments
++- dev: cognito-{project}-dev  
++- stage: cognito-{project}-stage  
++- prod: cognito-{project}-prod
++
++Each environment must have its own User Pool and App Clients or clear namespacing to avoid cross‑environment leakage.
++
++## User Pool — high level settings
++- Name pattern: {project}-user-pool-{env}  
++- Attributes:
++  - Required: email  
++  - Optional: given_name, family_name, phone_number  
++- Password policy:
++  - Minimum length: 8  
++  - Require: upper, lower, number, special (confirm with Security)  
++- Verification:
++  - Email verification via 6-digit numeric code  
++  - Verification code TTL: 10 minutes (configurable)  
++  - Max verification attempts per code: 5  
++- MFA: Disabled for MVP  
++- Account recovery: Email-based (enabled)
++
++## App Clients (per platform)
++1. **Mobile iOS client**  
++   - Name: {project}-ios-client-{env}  
++   - Grant types: Authorization code grant  
++   - PKCE: REQUIRED  
++   - Callback/Redirect URIs: app scheme(s) + hosted UI redirect  
++   - Client secret: DO NOT GENERATE for mobile
++
++2. **Mobile Android client**  
++   - Name: {project}-android-client-{env}  
++   - PKCE: REQUIRED  
++   - Redirect URIs: intent scheme + hosted UI redirect  
++   - Client secret: DO NOT STORE in app
++
++3. **Web client (server-side)**  
++   - Name: {project}-web-client-{env}  
++   - Grant types: Authorization code grant (server-side)  
++   - Client secret: allowed for server-side apps only  
++   - Redirect URIs: https://{domain}/auth/callback
++
++Common client settings:
++- access token expiration: 10–15 minutes (TBD)  
++- refresh token expiration: 7–30 days (TBD)  
++- id token expiration: 10–60 minutes (TBD)  
++- token revocation: enabled and documented
++
++## Hosted UI
++- Use Cognito hosted domain or custom domain if branding required.  
++- Strict redirect URI allowlist — no wildcards.  
++- Hosted UI flows used for SSO (Google, Apple) and email signin/signup.
++
++## Identity Providers (IdP)
++- **Google (OIDC)**  
++  - Create OAuth app in Google Console and supply client_id to Cognito  
++  - Map attributes: email → email, name → name  
++  - Scopes: openid email profile
++
++- **Apple Sign In**  
++  - Register Service ID and upload private key, set Team ID in Apple Developer  
++  - Configure in Cognito; handle email private relay cases
++
++## Email (SES) integration
++- Verify SES identities for dev/stage/prod  
++- Templates:
++  - verification_email_template (6-digit code)  
++  - password_reset_template (6-digit code)  
++- Sender address: no-reply@{domain} (verified)  
++- Configure DKIM/SPF and bounce/complaint handling
++
++## Security & Best Practices
++- Enforce PKCE for all native/mobile clients  
++- Do NOT store client_secret in mobile apps  
++- Validate state & nonce for OAuth flows  
++- Exact-match redirect URIs only  
++- Token storage:
++  - refresh_token: Keychain (iOS) / Keystore (Android)  
++  - access/id tokens: in-memory  
++- Token rotation & revoke: document policy  
++- Redact PII and token material from logs; audit auth events
++
++## Monitoring & Observability
++- Metrics to collect: registration success rate, email delivery, login success/failure per flow, token refresh failures, latency p95  
++- Alerts: auth error rate spike, SES bounce spike, PKCE callback errors
++
++## Testing / Validation (dev)
++- E2E: register→verify→login; forgot→reset→login; SSO Google/Apple; logout & GlobalSignOut; refresh token behavior  
++- Validate PKCE end‑to‑end; confirm email templates render and deliver
++
++## IaC / Manual Steps
++- Prefer IaC (Terraform/CloudFormation). Use variables for env.  
++- If manual: capture console export JSON for reproducibility and commit to infra repo (without secrets).
++
++## Ownership
++- Owner: <owner-placeholder>  
++- Platform/Infra: create pools & clients  
++- Mobile Lead: confirm redirect URIs and fingerprints  
++- Security Lead: approve TTLs and rate limits
++
++## References
++- [/features/auth/assessment.md](/features/auth/assessment.md)  
++- [/docs/decisions/ADR-001-authentication.md](/docs/decisions/ADR-001-authentication.md)
++
++## Quick infra checklist
++- [ ] Create User Pool(s) for dev/stage/prod  
++- [ ] Create App Clients for iOS/Android/Web with PKCE for mobile  
++- [ ] Configure Hosted UI domain(s)  
++- [ ] Register Google & Apple IdP for each env  
++- [ ] Verify SES identities and create templates  
++- [ ] Document redirect URIs, bundle IDs, Android SHA fingerprints
+
+diff --git a/runbooks/deployment-auth.md b/runbooks/deployment-auth.md
+new file mode 100644
+index 0000000..e69de29
+--- /dev/null
++++ b/runbooks/deployment-auth.md
+@@ -0,0 +1,250 @@
++---
++title: Deployment Runbook — Authentication Feature
++status: Draft
++owner: <owner-placeholder>
++oncall: SRE Team
++feature_flag: feature.auth.*
++last_review: YYYY-MM-DD
++language: en
++---
++
++# Deployment Runbook — Authentication Feature
++
++## Purpose
++This runbook describes deployment, verification, and rollback procedures for the Authentication feature (Cognito Hosted UI, email flows, Google/Apple SSO). Use during staged rollout and incident response.
++
++## Required references (project-internal)
++- [/features/auth/assessment.md](/features/auth/assessment.md)  
++- [/docs/decisions/ADR-001-authentication.md](/docs/decisions/ADR-001-authentication.md)  
++- [/reference/integration/cognito-configuration.md](/reference/integration/cognito-configuration.md)  
++- [/features/auth/testing.md](/features/auth/testing.md)
++
++## Contacts & RACI
++- Owner / Executor: <owner-placeholder>  
++- Platform/Infra: create & manage Cognito/SES  
++- Mobile Lead: client verification (PKCE / secure storage)  
++- SRE: dashboards & alerts, rollback execution  
++- Security Lead: threat signoff  
++- Oncall escalation: configured paging list / Slack channel
++
++## Pre-deploy checks (must be green)
++- [ ] Assessment & ADR referenced in PR and approved  
++- [ ] CI gates passed: unit, integration, e2e, SAST, dependency & secrets scan, IaC scan, docs linkcheck  
++- [ ] Dev & staging Cognito User Pools exist and mirror prod config schema  
++- [ ] SES verified identities for sending emails  
++- [ ] Google & Apple IdP configured in staging and smoke-tested  
++- [ ] Feature flag exists: `feature.auth.*` and can be toggled  
++- [ ] Dashboards created & linked (auth success rate, error rate, p95 latency, SES bounce rate)  
++- [ ] Test accounts created (see Appendix)
++
++## Deployment strategy
++- Gate: feature flag `feature.auth.*` controls prod behavior. Perform staged rollout behind this flag: 5% → 25% → 50% → 100%. Do not proceed to next stage until verification window passes and metrics are healthy.
++
++## Metric thresholds / rollback triggers
++- Success goal during rollout windows:
++  - Error rate < 1% (auth failures excluding expected 4xx)  
++  - p95 latency < 500 ms (excluding external IdP latency)
++- Immediate rollback triggers:
++  - Error rate spike above 5% over 5–10 minutes  
++  - p95 latency > 500 ms sustained for 10+ minutes  
++  - Critical security incident (token leakage, exposed secret)  
++  - Major functional regression
++
++## Deployment steps — Staging
++1. Deploy candidate to staging.  
++2. Toggle `feature.auth.*` ON in staging (or subflags).  
++3. Run smoke tests (see /features/auth/testing.md).  
++4. Validate dashboards and metrics.  
++5. If issues — fix and redeploy.
++
++## Deployment steps — Production (canary → full)
++1. Pre‑deploy checks green; stakeholders notified.  
++2. Deploy code & infra changes to production.  
++3. Set feature flag to Canary 5%. Document time & settings.  
++4. Wait verification window: 15–30 minutes. Monitor metrics and run smoke tests.  
++5. If OK → increase to 25% (30–60 minutes).  
++6. If OK → increase to 50% (60 minutes).  
++7. If OK → increase to 100%.  
++8. If a rollback trigger fires → execute rollback procedure.
++
++## Smoke tests (manual + automated)
++- Use test accounts in Appendix A. For each window, run:
++  1. Register → receive code → verify → tokens issued  
++  2. Login with email/password  
++  3. Forgot password → receive code → reset → login  
++  4. Logout → GlobalSignOut → confirm refresh token invalidation  
++  5. Google SSO — Hosted UI end‑to‑end  
++  6. Apple Sign‑in — Hosted UI on iOS  
++  7. Token refresh flow  
++  8. Negative PKCE test
++
++Record timestamps, logs, and metric snapshots for each test.
++
++## Rollback procedure (fast)
++1. Toggle `feature.auth.*` OFF (or reduce exposure).  
++2. If code rollback needed, redeploy previous stable release.  
++3. If Cognito config change caused issue, revert configuration.  
++4. Inform stakeholders and open incident ticket.  
++5. SRE: capture logs, traces, and metrics for post‑mortem.
++
++## Post-rollback steps
++- Triage: Lead Dev + SRE + Security to analyze logs and reproduce in staging.  
++- Create Jira issues for root cause fixes.  
++- Re‑test in staging and only re‑schedule rollout after fixes validated.
++
++## Post-deploy validation & acceptance
++- Confirm smoke tests passed at 100% rollout.  
++- Confirm dashboards stable for 60 minutes post‑100% deployment.  
++- Security: no token leaks, no PII in logs.  
++- Update docs: record timestamps, decisions, and update /runbooks/deployment-auth.md with outcomes.
++
++## Observability & logs (where to look)
++- Auth dashboard (link placeholder)  
++- SES delivery metrics  
++- Application logs: search for auth:error, token:revoke, cognito:callback events  
++- Distributed traces: correlate by request id
++
++## Escalation matrix
++- 0–15 min: Lead Dev + SRE investigate; quick rollback if severe.  
++- 15–60 min: include Security Lead and Product Owner.  
++- >60 min or data breach: escalate to executive incident process.
++
++## Appendix A — Test accounts (examples)
++- dev_verified@example.com — password: TempPass!123 — verified  
++- dev_unverified@example.com — password: TempPass!123 — unverified  
++- sso_google_test@example.com — Google test account  
++- sso_apple_test@privaterelay.appleid.com — Apple test account
++
++## Appendix B — Useful commands (examples)
++- Toggle feature flag (example):
++  - curl -X POST https://flags.example.com/api/toggle -d '{"flag":"feature.auth.*","state":"off"}' -H "Authorization: Bearer <FLAG_TOKEN>"
++- Cognito global sign out (AWS CLI):
++  - aws cognito-idp admin-user-global-sign-out --user-pool-id <pool-id> --username <username>
++
++## Change log
++- YYYY-MM-DD — Draft created by <owner-placeholder>  
++- YYYY-MM-DD — Reviewed by SRE / Security
++
++---
+
+diff --git a/observability/auth-dashboards.md b/observability/auth-dashboards.md
+new file mode 100644
+index 0000000..e69de29
+--- /dev/null
++++ b/observability/auth-dashboards.md
+@@ -0,0 +1,200 @@
++---
++title: Observability & SLOs — Authentication Feature
++status: Draft
++owner: <owner-placeholder>
++last_review: YYYY-MM-DD
++feature: Authentication
++feature_flag: feature.auth.*
++language: en
++---
++
++# Observability & SLOs — Authentication Feature
++
++## Purpose
++Define key SLIs/SLOs, metrics, dashboards and alert thresholds required for a safe staged rollout and operation of the Authentication feature.
++
++## Project-internal references
++- [/features/auth/assessment.md](/features/auth/assessment.md)  
++- [/features/auth/requirements.md](/features/auth/requirements.md)  
++- [/reference/integration/cognito-configuration.md](/reference/integration/cognito-configuration.md)  
++- [/runbooks/deployment-auth.md](/runbooks/deployment-auth.md)
++
++## Rollout recommendation
++Staged rollout behind feature flag `feature.auth.*`: 5% → 25% → 50% → 100% with validation windows and rollback triggers.
++
++## SLIs (by flow)
++- Success rate by flow (percentage successful transactions)  
++- Error rate by flow (5xx + functional errors)  
++- Latency (p50/p95/p99) end‑to‑end auth flow (track external IdP latency separately)  
++- Token refresh success rate  
++- SES delivery metrics (delivery, bounce, complaint)  
++- PKCE/callback errors count  
++- Security signals (unusual rate limit, repeated failed verifications)
++
++## Proposed SLOs (initial)
++- Auth flow success rate (per flow): ≥ 99% over 1h window  
++- Error rate (per flow): < 1% over 5–15 min window  
++- p95 latency (end‑to‑end excluding external IdP): < 500 ms  
++- Token refresh success rate: ≥ 99.5%  
++- SES delivery (verification/reset): ≥ 99% within 60s in dev/stage  
++- PKCE callback errors: < 0.1% of attempts
++
++## Required dashboards
++1. Auth Overview — aggregated success/error/latency, feature flag state  
++2. Flow detail panels — per flow success/error/latency and recent errors  
++3. SES panel — sent/min, delivery rate, bounce rate  
++4. Security & Abuse — rate limit events, repeated verification failures  
++5. Infra health — Cognito API errors, throttling, region latency  
++6. Canary / Rollout panel — exposure %, cohort metrics
++
++## Alerts (recommended thresholds)
++Critical:
++- Error rate > 5% sustained for 5–10 minutes → immediate rollback / flag OFF  
++- p95 latency > 500 ms sustained for 10+ minutes → investigate / consider rollback  
++- SES bounce rate spike > 2% (15 min) → investigate delivery/DNS/DKIM  
++- Confirmed token leakage → security incident
++
++High:
++- Error rate 1–5% for 10 minutes → page oncall  
++- PKCE callback errors spike (10x baseline) → investigate redirect URIs
++
++Alert payload must include: timestamp, flow, metric value, region, redacted log snippets, trace link, link to runbook [/runbooks/deployment-auth.md](/runbooks/deployment-auth.md).
++
++## Instrumentation requirements
++- Tag events with: flow, environment, hashed user_id, client_platform, app_version, request_id  
++- Tracing: propagate trace ids through Hosted UI callbacks and token exchange  
++- Logs: structured JSON, PII redaction, audit events for register/verify/login/forgot/logout/revoke  
++- Metrics resolution: 1m granularity for canary windows; retention as per policy
++
++## Roles & responsibilities (placeholders)
++- Owner: <owner-placeholder> — maintain doc and finalize SLOs  
++- SRE: implement dashboards & alerts  
++- Platform/Infra: export Cognito/SES metrics  
++- Mobile Lead: provide cohort mapping  
++- Security Lead: validate security alerts & thresholds  
++- QA: execute smoke tests during canary
++
++## Canary verification checklist
++- [ ] Canary cohort enabled at target percent  
++- [ ] Auth Overview: success rate within SLO for cohort  
++- [ ] No flow has error rate > agreed threshold  
++- [ ] SES delivery within expected bounds  
++- [ ] Security panel: no suspicious activity  
++- [ ] QA smoke tests executed and green (/features/auth/testing.md)
++
++## Acceptance criteria
++- Dashboards implemented and links inserted here  
++- Critical alerts configured and tested  
++- Canary panel shows cohort metrics and allows % control  
++- QA and Security signed off on SLO values
++
++## Operational notes
++- Maintain 1:1 cadence between Lead Dev and SRE during canary windows  
++- Use dedicated channel for deployment coordination and incident comms  
++- Record decisions and metric snapshots in post-deploy report (/reports/auth-post-deploy.md)
++
++## Change log
++- YYYY-MM-DD — Draft created by <owner-placeholder>  
++- YYYY-MM-DD — Reviewed by SRE / Security
++
++---
+
+diff --git a/mkdocs.yml b/mkdocs.yml
+new file mode 100644
+index 0000000..e69de29
+--- /dev/null
++++ b/mkdocs.yml
+@@ -0,0 +1,48 @@
++site_name: Auth Platform Documentation
++docs_dir: .
++theme:
++  name: material
++nav:
++  - Assessment: features/auth/assessment.md
++  - ADR: docs/decisions/ADR-001-authentication.md
++  - Requirements: features/auth/requirements.md
++  - Tasks: features/auth/tasks.md
++  - Testing: features/auth/testing.md
++  - Reference:
++      - Cognito Configuration: reference/integration/cognito-configuration.md
++  - Runbook: runbooks/deployment-auth.md
++  - Observability: observability/auth-dashboards.md
++plugins:
++  - search
++  - mkdocs-simple-hooks
++markdown_extensions:
++  - toc:
++      permalink: true
++
++extra:
++  features:
++    - feature.auth.*
++
+diff --git a/.github/PULL_REQUEST_TEMPLATE.md b/.github/PULL_REQUEST_TEMPLATE.md
+new file mode 100644
+index 0000000..e69de29
+--- /dev/null
++++ b/.github/PULL_REQUEST_TEMPLATE.md
+@@ -0,0 +1,84 @@
++## Summary
++Short description of the change and scope.
++
++## Linked References (required)
++- Assessment: /features/auth/assessment.md  
++- ADR: /docs/decisions/ADR-001-authentication.md  
++- Requirements: /features/auth/requirements.md
++
++## Feature flag
++- Flag name (e.g.): `feature.auth.<subfeature>`
++- Default state in prod: OFF
++
++## Security checklist (required)
++- [ ] SAST scan: link to results (CI artifact)  
++- [ ] Secrets scan: no secrets in the diff  
++- [ ] OAuth/redirect URIs reviewed (if applicable)
++
++## Docs
++- [ ] MkDocs preview built and validated (link)  
++- [ ] Diátaxis artifacts updated (How‑to / Reference / Tutorial / Explanation)
++
++## Observability
++- Dashboards linked: (insert links)  
++- Alerts configured for rollout thresholds
++
++## Testing
++- [ ] Unit tests added/updated  
++- [ ] Integration tests green  
++- [ ] Critical e2e tests green
++
++## Rollout Plan
++- Canary plan and rollback criteria documented in /runbooks/deployment-auth.md
++
++## Notes
++- Additional context, decisions, or migration steps
+
+diff --git a/.github/workflows/docs-ci.yml b/.github/workflows/docs-ci.yml
+new file mode 100644
+index 0000000..e69de29
+--- /dev/null
++++ b/.github/workflows/docs-ci.yml
+@@ -0,0 +1,82 @@
++name: Docs CI
++
++on:
++  pull_request:
++    paths:
++      - '**/*.md'
++      - '.github/**'
++
++jobs:
++  build:
++    runs-on: ubuntu-latest
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++
++      - name: Set up Python
++        uses: actions/setup-python@v4
++        with:
++          python-version: '3.10'
++
++      - name: Install requirements
++        run: |
++          python -m pip install --upgrade pip
++          pip install mkdocs mkdocs-material markdownlint
++
++      - name: Lint Markdown (basic)
++        run: |
++          markdownlint **/*.md || true
++
++      - name: Build MkDocs site
++        run: |
++          mkdocs build --clean
++
++      - name: Check links
++        run: |
++          # simple linkcheck using mkdocs plugin if available, otherwise skip
++          echo "Linkcheck: verify site build and internal links"
++          # if a plugin/linkchecker is configured, run it here
++
++      - name: Upload site artifact
++        uses: actions/upload-artifact@v4
++        with:
++          name: mkdocs-site
++          path: site/
++
++  # Additional jobs (lint/vale, linkcheck) can be added as needed
