@@ -102,12 +102,12 @@ Owners and RACI (initial)
 
 References (canonical and internal)
 - Standards (canonical): Security, OAuth/SSO, Data Privacy, Observability, Feature Flags — central standards repo (TBD)
-- docs/decisions/adr-00x-authentication.md (to be created)
-- docs/security/authentication.md (Cognito integration overview; to be created)
-- reference/integration/cognito-configuration.md (to be created)
+- [/docs/decisions/adr-00x-authentication.md](/docs/decisions/adr-00x-authentication.md) (to be created)
+- [/docs/security/authentication.md](/docs/security/authentication.md) (Cognito integration overview; to be created)
+- [/reference/integration/cognito-configuration.md](/reference/integration/cognito-configuration.md) (to be created)
 - reference/api/auth-openapi.yaml (only if BFF/API is introduced; to be created)
-- runbooks/deployment-auth.md (to be created)
-- features/auth/requirements.md, features/auth/design.md, features/auth/testing.md (to be created)
+- [/runbooks/deployment-auth.md](/runbooks/deployment-auth.md) (to be created)
+- [/features/auth/requirements.md](/features/auth/requirements.md), [/features/auth/design.md](/features/auth/design.md), [/features/auth/testing.md](/features/auth/testing.md) (to be created)
 
 Appendix: Environment Checklist (seed)
 - [ ] User Pool created for dev/stage/prod
